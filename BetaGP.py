@@ -24,9 +24,11 @@ import matplotlib.gridspec as gridspec
 import sys
 import time
 
-from main import x, y, xx, yy
+from Data import x, y, xx, yy
 
-
+# Squeeze y and yy a tiny bit (linearly) as Beta breaks at absolute 0 and 1
+y = y * (1 - 1e-4) + 0.5e-4
+yy = yy * (1 - 1e-4) + 0.5e-4
 # ---------------------------------------------------------------------------------------------
 # Beta likelihood
 # ---------------------------------------------------------------------------------------------
@@ -56,7 +58,6 @@ class BetaTFPConditional(MultiLatentTFPConditional):
             **kwargs,
         )
 
-
 # ---------------------------------------------------------------------------------------------
 # Model definition
 # ---------------------------------------------------------------------------------------------
@@ -69,7 +70,7 @@ P = 2
 L = 2
 kernel = gp.kernels.LinearCoregionalization(
     [
-        gp.kernels.SquaredExponential() + gp.kernels.Linear(),  # This is k1, the kernel of f1
+        gp.kernels.Matern52(lengthscales=0.1) + gp.kernels.Linear(),  # This is k1, the kernel of f1
         gp.kernels.SquaredExponential(),  # this is k2, the kernel of f2
     ], W=np.random.randn(P, L)
 )
@@ -100,7 +101,7 @@ x_new = x[~np.isnan(x).any(axis=1)]
 y_new = y[~np.isnan(y).any(axis=1)]
 
 # Squeezes y a tiny bit (linearly) as Beta breaks at absolute 0 and 1
-data = (x_new, y_new * (1 - 1e-4) + 0.5e-4)
+data = (x_new, y_new)
 train_dataset = tf.data.Dataset.from_tensor_slices(data).repeat().shuffle(minibatch_size * 50)
 
 train_iter = iter(train_dataset.batch(minibatch_size))
@@ -149,73 +150,30 @@ dist_old = np.empty((beta_samples, len(xx), nsamp))
 print("Calculating the Beta dist, mean and var per test point, this can take some time..")
 alpha = trans(tf.squeeze(Fss[:, :, 0]))
 beta = trans(tf.squeeze(Fss[:, :, 1]))
-dist = np.array(tfd.Beta(alpha,beta).sample(beta_samples))
+dist = np.array(tfd.Beta(alpha,beta).sample(beta_samples)) # create beta dist per posterior sample and sample from it
 
-# # Find distributions for each posterior sample
-# for i in range(nsamp):
-#     # Alpha and Beta approximated from sampled data
-#     alpha1 = trans(tf.squeeze(Fss[i, :, 0]))
-#     beta1 = trans(tf.squeeze(Fss[i, :, 1]))
-
-#     # Store values and create a mean storage as well
-#     mean[:, i] = alpha1 / (alpha1 + beta1)
-
-#     # All you need to do is store the dist for each iteration
-#     dist_old[:, :, i] = (tfd.Beta(alpha1, beta1).sample(beta_samples))
-
-#     print("Calculated beta distribution", i,"/",nsamp)
-
-# yeet = 1.0
-dist = np.array(dist)
-
-# ---------------------------------------------------------------------------------------------
-# Total variance and mean, uniting of beta distribution
-# ---------------------------------------------------------------------------------------------
-
-# total mean
-total_mean = np.mean(mean, axis=1)
-
-# need a 2d numpy variant for calculations in NMSE
-total_mean_2D = total_mean.reshape(len(total_mean), 1)
-
-# total variance
-total_var = np.mean(np.var(dist, axis=0), axis=1) + np.var(np.mean(dist, axis=0), axis=1)
+total_mean = np.mean((alpha / (alpha + beta)), axis=0) # total mean across no of posterior samles
+total_var = np.mean(np.var(dist, axis=0), axis=0) + np.var(np.mean(dist, axis=0), axis=0) # total variance
 
 # final_alpha and beta
 final_alpha = total_mean ** 2 * ((1 - total_mean) / total_var - 1 / total_mean)
 final_beta = final_alpha * (1 / total_mean - 1)
 
 # stick back into Beta distribution
-final_dist = np.array(tfd.Beta(final_alpha, final_beta).sample(100))
+final_dist = tfd.Beta(final_alpha, final_beta)
+print("Done!")
+# final_dist = tfd.Beta(final_alpha, final_beta).sample(100)
 
 # ---------------------------------------------------------------------------------------------
 # Judging the model
 # ---------------------------------------------------------------------------------------------
- 
-# preallocate loxi
-loxi = np.zeros((len(xx), 1))
 
-# for loop to find likelihood of each yy given distribution at yy
-for i in range(len(xx)):
-    # Create distribution at instance of xx
-    dist_inside = tfd.Beta(final_alpha[i],final_beta[i])
-    # Find likelihood of actual value
-    likelihood_of_xx_inside = dist_inside.prob(yy[i])
-    # Numpify value
-    loxi_numpified = np.array(likelihood_of_xx_inside, dtype=float)
-    # log the value
-    log_loxi = np.log(loxi_numpified)
-    # Store the value
-    loxi[i,0] = loxi_numpified
-
-# Sum the loxi to find the total log likelihood
-log_likelihood = np.sum(loxi)
-
-print('Length of the xx:', len(xx), 'should be equal to the length of the loxi:', len(loxi))
-print('the total log likelihood is:', log_likelihood)
+# log likelihood calculation, this is currently not working for the given data
+log_likelihood_yy = np.sum(final_dist.log_prob(yy)) 
+print('Sum of the log likelihoods:', log_likelihood_yy)
 
 # calculate the error and turn it into a matrix so multiplication works
-y_yM_error = np.matrix(yy-total_mean_2D)
+y_yM_error = np.matrix(yy-total_mean.reshape(len(total_mean), 1))
 
 NMSE = np.array((100/(len(xx)*np.var(yy)))*np.sqrt(y_yM_error.T*y_yM_error))
 print(NMSE)
@@ -225,7 +183,7 @@ print(NMSE)
 # ---------------------------------------------------------------------------------------------
 
 plt.figure()
-line1 = plt.plot(xx, final_dist.T, ".", mew=.005, color='gray', alpha=0.02)
+line1 = plt.plot(xx, np.array(final_dist.sample(beta_samples)).T, ".", mew=.005, color='gray', alpha=0.02)
 line2 = plt.plot(xx, yy, ".", color='deepskyblue', markersize=0.8, label="Training points")
 line3 = plt.plot(xx, total_mean, color='k', lw=1, alpha=.9, label="Prediction mean")
 

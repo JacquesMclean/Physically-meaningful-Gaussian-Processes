@@ -17,7 +17,7 @@ from matplotlib.patches import Patch
 # Misc
 import sys
 
-from main import x, y, xx, yy
+from Data import x, y, xx, yy
 
 # ---------------------------------------------------------------------------------------------
 # Data

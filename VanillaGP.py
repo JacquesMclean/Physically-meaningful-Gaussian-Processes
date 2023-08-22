@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 # Import data from main file
-from main import x, y, xx, yy
+from Data import x, y, xx, yy
 
 # ---------------------------------------------------------------------------------------------
 # GP stuff
@@ -102,15 +102,12 @@ log_likelihood_sum = np.sum(hand_log_likelihood)
 
 print('The result that matters and it better be small:', log_likelihood_sum)
 
-
 # need to turn this into matrix so dot product works
 y_yM_error = np.matrix(yy-Ymean_2D)
 
-NMSE1 = np.array((100/(len(xx)*np.var(yy)))*(y_yM_error.T*y_yM_error))
-NMSE2 = np.array((100/(len(xx)*np.var(yy)))*np.sqrt(y_yM_error.T*y_yM_error))
+NMSE = np.array((100/(len(xx)*np.var(yy)))*np.sqrt(y_yM_error.T*y_yM_error))
 
-print(NMSE1)
-print(NMSE2)
+print(NMSE)
 
 # ---------------------------------------------------------------------------------------------
 # Plotting
