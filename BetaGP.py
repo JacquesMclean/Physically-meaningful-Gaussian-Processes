@@ -168,7 +168,7 @@ print("Done!")
 # Judging the model
 # ---------------------------------------------------------------------------------------------
 
-# log likelihood calculation, this is currently not working for the given data
+# log likelihood calculation
 log_likelihood_yy = 0
 for i in range(yy.shape[0]):
     log_likelihood_yy += (final_dist[i].log_prob(yy[i])) 
