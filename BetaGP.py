@@ -169,8 +169,11 @@ print("Done!")
 # ---------------------------------------------------------------------------------------------
 
 # log likelihood calculation, this is currently not working for the given data
-log_likelihood_yy = np.sum(final_dist.log_prob(yy)) 
-print('Sum of the log likelihoods:', log_likelihood_yy)
+log_likelihood_yy = 0
+for i in range(yy.shape[0]):
+    log_likelihood_yy += (final_dist[i].log_prob(yy[i])) 
+
+print('Sum of the log likelihoods:', np.array(log_likelihood_yy))
 
 # calculate the error and turn it into a matrix so multiplication works
 y_yM_error = np.matrix(yy-total_mean.reshape(len(total_mean), 1))
